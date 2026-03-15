@@ -4,61 +4,106 @@ import io
 from openai import OpenAI
 from PIL import Image
 
-# API 키 설정
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"].strip())
+# OpenAI 연결
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-st.title("👕 나의 퍼스널 스타일 분석기")
+st.set_page_config(page_title="나만의 AI 친구", page_icon="🤖")
 
-# 대화 기록 유지
+st.title("🤖 나만의 AI 친구")
+st.caption("아무 질문이나 해보세요! 사진도 분석해 드려요 📷")
+
+# 대화 기록 저장
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 기존 대화 표시
+# 이전 대화 출력
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# 이미지 업로드 및 질문 입력
-uploaded_files = st.file_uploader("사진을 올려주세요 (비교할 사진을 여러 장 선택해도 좋아요)", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
-prompt = st.chat_input("사진을 분석하고 순위를 매겨줘!")
+# 이미지 업로드
+uploaded_files = st.file_uploader(
+    "사진 업로드 (선택)",
+    type=["png","jpg","jpeg"],
+    accept_multiple_files=True
+)
+
+# 질문 입력
+prompt = st.chat_input("궁금한 걸 물어보세요!")
 
 if prompt:
-    st.session_state.messages.append({"role": "user", "content": prompt})
+
+    # 사용자 메시지 표시
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    content_payload = [{"type": "text", "text": prompt}]
-    
+    # 메시지 구성
+    content = [{"type":"text","text":prompt}]
+
     if uploaded_files:
-        for uploaded_file in uploaded_files:
-            image = Image.open(uploaded_file)
-            image.thumbnail((1024, 1024))
-            buffered = io.BytesIO()
-            image.save(buffered, format="JPEG")
-            img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
-            content_payload.append({
-                "type": "image_url", 
-                "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"}
+        for file in uploaded_files:
+
+            image = Image.open(file)
+            image.thumbnail((1024,1024))
+
+            buf = io.BytesIO()
+            image.save(buf, format="JPEG")
+
+            img_base64 = base64.b64encode(buf.getvalue()).decode()
+
+            content.append({
+                "type":"image_url",
+                "image_url":{
+                    "url":f"data:image/jpeg;base64,{img_base64}"
+                }
             })
 
-    # [핵심] 스타일을 결정짓는 시스템 명령
-    system_instruction = {
-        "role": "system", 
-        "content": """당신은 패션 및 이미지 분석 전문가입니다. 사용자가 사진을 올리면 반드시 다음 규칙을 따라 답변하세요.
-        1. 첫 줄: 사진 속 대상(색상, 스타일 등)을 먼저 정의하고 리스트화 하세요.
-        2. 순위 매기기: [1️⃣, 2️⃣, 3️⃣] 번호를 사용해 가장 추천하는 순서대로 정렬하세요.
-        3. 상세 분석: 각 항목마다 장점과 단점을 불렛 포인트로 명확히 작성하세요.
-        4. 최종 결론: 마지막에 '👉 개인적으로 ~가 제일 좋아 보였습니다'와 같이 결론을 내리세요.
-        5. 말투: 친구에게 조언하듯 친근하고 상냥하게 하세요. (👍, 👕, 👖 같은 이모지 적극 활용)
-        6. 가독성: 중요한 내용은 볼드체(**텍스트**)로 강조하고, 전체적으로 구조화하여 작성하세요."""
+    # 시스템 프롬프트 (ChatGPT 스타일)
+    system_prompt = {
+        "role":"system",
+        "content":"""
+너는 친근하고 재미있는 AI 친구야.
+
+대화 스타일:
+- 친구처럼 자연스럽게 대화
+- 너무 딱딱하지 않게
+- 이모지 적당히 사용 😊
+- 설명은 이해하기 쉽게
+- 사용자가 올린 사진이 있으면 분석
+
+가능한 것:
+- 일반 질문 답변
+- 고민 상담
+- 패션/코디 분석
+- 사진 분석
+- 정보 설명
+"""
     }
 
+    messages = [system_prompt]
+
+    for m in st.session_state.messages:
+        messages.append({
+            "role":m["role"],
+            "content":m["content"]
+        })
+
+    messages.append({
+        "role":"user",
+        "content":content
+    })
+
+    # AI 응답
     with st.chat_message("assistant"):
+
         stream = client.chat.completions.create(
             model="gpt-4o",
-            messages=[system_instruction] + st.session_state.messages,
-            stream=True,
+            messages=messages,
+            stream=True
         )
+
         response = st.write_stream(stream)
-    
-    st.session_state.messages.append({"role": "assistant", "content": response})
+
+    # 대화 기록 저장
+    st.session_state.messages.append({"role":"user","content":prompt})
+    st.session_state.messages.append({"role":"assistant","content":response})
