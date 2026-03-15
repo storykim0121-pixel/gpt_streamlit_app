@@ -11,7 +11,7 @@ st.set_page_config(page_title="AI 친구", page_icon="🤖")
 st.title("🤖 나만의 AI 친구")
 st.caption("사진 분석도 하고 자유롭게 대화해보세요!")
 
-# 대화 기록
+# 대화 저장
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -24,42 +24,32 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# -----------------------------
+# --------------------
 # 입력 영역
-# -----------------------------
+# --------------------
 
 prompt = st.text_input("궁금한 걸 물어보세요")
 
 uploaded_files = st.file_uploader(
-    "사진 업로드 (선택 / 여러 장 가능)",
+    "사진 업로드 (여러 장 가능)",
     type=["png","jpg","jpeg"],
     accept_multiple_files=True
 )
 
-send = st.button("보내기")
+# ⭐ 사진 항상 표시
+if uploaded_files:
 
-# -----------------------------
-# 질문 처리
-# -----------------------------
+    st.write("📷 업로드된 사진")
 
-if send and prompt:
+    for i, file in enumerate(uploaded_files):
 
-    with st.chat_message("user"):
-        st.markdown(prompt)
+        image = Image.open(file)
 
-    content = [{"type": "text", "text": prompt}]
+        # 세로 표시
+        st.image(image, caption=f"{i+1}번 사진", use_container_width=True)
 
-    # 처음 업로드 시만 이미지 표시
-    if uploaded_files and len(st.session_state.images) == 0:
-
-        st.write("📷 업로드된 사진")
-
-        for i, file in enumerate(uploaded_files):
-
-            image = Image.open(file)
-
-            # ⭐ 세로 표시
-            st.image(image, caption=f"{i+1}번 사진", use_container_width=True)
+        # GPT 전달용 저장 (처음만)
+        if len(st.session_state.images) < len(uploaded_files):
 
             image.thumbnail((1024,1024))
 
@@ -70,7 +60,19 @@ if send and prompt:
 
             st.session_state.images.append(img_base64)
 
-    # GPT에 이미지 전달
+send = st.button("보내기")
+
+# --------------------
+# 질문 처리
+# --------------------
+
+if send and prompt:
+
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    content = [{"type": "text", "text": prompt}]
+
     for img in st.session_state.images:
         content.append({
             "type":"image_url",
@@ -97,21 +99,6 @@ if send and prompt:
 3️⃣ 어울리는 순위
 4️⃣ 장점과 단점
 5️⃣ 최종 결론
-
-형식 예시
-
-사진을 보면 이런 특징이 있습니다 👀
-
-1️⃣ 1번 사진 — 설명
-2️⃣ 2번 사진 — 설명
-
-전체적으로 어울리는 순서를 말해보면 👇
-
-🥇 1위 — 이유
-🥈 2위 — 이유
-🥉 3위 — 이유
-
-👉 개인적인 추천을 말한다.
 """
     }
 
@@ -119,13 +106,13 @@ if send and prompt:
 
     for m in st.session_state.messages:
         messages.append({
-            "role": m["role"],
-            "content": m["content"]
+            "role":m["role"],
+            "content":m["content"]
         })
 
     messages.append({
-        "role": "user",
-        "content": content
+        "role":"user",
+        "content":content
     })
 
     with st.chat_message("assistant"):
@@ -134,7 +121,6 @@ if send and prompt:
             model="gpt-4o",
             messages=messages,
             temperature=1.1,
-            top_p=0.95,
             stream=True
         )
 
