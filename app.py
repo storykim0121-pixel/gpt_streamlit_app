@@ -1,112 +1,68 @@
 import streamlit as st
-import base64
-import io
 from openai import OpenAI
-from PIL import Image
 
+# OpenAI API 연결
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-st.title("🤖 AI 친구")
+# 시스템 프롬프트 (ChatGPT 스타일)
+SYSTEM_PROMPT = """
+You are a friendly and natural conversational AI.
 
-# 대화 저장
+Rules:
+- Speak naturally like chatting with a friend.
+- Be warm, helpful, and clear.
+- Avoid sounding robotic or overly formal.
+- Keep answers concise but informative.
+- If the user speaks Korean, respond in Korean.
+"""
+
+# 세션에 대화 기록 저장
 if "messages" not in st.session_state:
-    st.session_state.messages = []
+    st.session_state.messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "assistant", "content": "안녕하세요! 무엇을 도와드릴까요? 🙂"}
+    ]
 
-# 이미지 저장
-if "images" not in st.session_state:
-    st.session_state.images = []
+# 제목
+st.title("My GPT Chat")
 
-# 기존 대화 표시
+# 기존 채팅 출력
 for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+    if msg["role"] == "user":
+        with st.chat_message("user"):
+            st.write(msg["content"])
 
-# -------------------
-# 입력 영역
-# -------------------
+    elif msg["role"] == "assistant":
+        with st.chat_message("assistant"):
+            st.write(msg["content"])
 
-prompt = st.text_input("궁금한 걸 물어보세요")
+# 사용자 입력
+user_input = st.chat_input("메시지를 입력하세요")
 
-uploaded_files = st.file_uploader(
-    "사진 업로드",
-    type=["png","jpg","jpeg"],
-    accept_multiple_files=True
-)
+if user_input:
 
-# 📷 사진 미리보기 (가로 정렬)
-if uploaded_files:
-
-    st.write("📷 업로드된 사진")
-
-    cols = st.columns(len(uploaded_files))
-
-    for i, file in enumerate(uploaded_files):
-
-        image = Image.open(file)
-
-        with cols[i]:
-            st.image(image, caption=f"{i+1}번", use_container_width=True)
-
-# 보내기 버튼
-send = st.button("보내기")
-
-# -------------------
-# 질문 처리
-# -------------------
-
-if send and prompt:
-
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    content = [{"type":"text","text":prompt}]
-
-    # 이미지 GPT 전달
-    if uploaded_files:
-        for file in uploaded_files:
-
-            image = Image.open(file)
-            image.thumbnail((1024,1024))
-
-            buf = io.BytesIO()
-            image.save(buf, format="JPEG")
-
-            img_base64 = base64.b64encode(buf.getvalue()).decode()
-
-            content.append({
-                "type":"image_url",
-                "image_url":{
-                    "url":f"data:image/jpeg;base64,{img_base64}"
-                }
-            })
-
-    system_prompt = {
-        "role":"system",
-        "content":"친근한 AI 친구처럼 대화하고 사진이 있으면 분석도 해준다."
-    }
-
-    messages = [system_prompt]
-
-    for m in st.session_state.messages:
-        messages.append({
-            "role":m["role"],
-            "content":m["content"]
-        })
-
-    messages.append({
-        "role":"user",
-        "content":content
+    # 사용자 메시지 저장
+    st.session_state.messages.append({
+        "role": "user",
+        "content": user_input
     })
 
+    # GPT 호출
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=st.session_state.messages,
+        temperature=0.7,
+        max_tokens=800
+    )
+
+    reply = response.choices[0].message.content
+
+    # GPT 답변 저장
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": reply
+    })
+
+    # 화면에 출력
     with st.chat_message("assistant"):
-
-        stream = client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages,
-            stream=True
-        )
-
-        response = st.write_stream(stream)
-
-    st.session_state.messages.append({"role":"user","content":prompt})
-    st.session_state.messages.append({"role":"assistant","content":response})
+        st.write(reply)
