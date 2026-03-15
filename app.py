@@ -1,52 +1,16 @@
-import streamlit as st
-import base64
-import io
-from openai import OpenAI
-from PIL import Image
-
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-
-st.set_page_config(page_title="AI 친구", page_icon="🤖")
-
-st.title("🤖 나만의 AI 친구")
-st.caption("사진 분석도 하고 자유롭게 대화해보세요!")
-
-# 대화 저장
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# 이미지 저장
-if "images" not in st.session_state:
-    st.session_state.images = []
-
-# 이전 대화 표시
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
-
-# --------------------
-# 입력 영역
-# --------------------
-
-prompt = st.text_input("궁금한 걸 물어보세요")
-
-uploaded_files = st.file_uploader(
-    "사진 업로드 (여러 장 가능)",
-    type=["png","jpg","jpeg"],
-    accept_multiple_files=True
-)
-
-# ⭐ 사진 항상 표시
 if uploaded_files:
 
     st.write("📷 업로드된 사진")
+
+    cols = st.columns(len(uploaded_files))
 
     for i, file in enumerate(uploaded_files):
 
         image = Image.open(file)
 
-        # 세로 표시
-        st.image(image, caption=f"{i+1}번 사진", use_container_width=True)
+        # 가로로 정렬
+        with cols[i]:
+            st.image(image, caption=f"{i+1}번", use_container_width=True)
 
         # GPT 전달용 저장 (처음만)
         if len(st.session_state.images) < len(uploaded_files):
@@ -59,72 +23,3 @@ if uploaded_files:
             img_base64 = base64.b64encode(buf.getvalue()).decode()
 
             st.session_state.images.append(img_base64)
-
-send = st.button("보내기")
-
-# --------------------
-# 질문 처리
-# --------------------
-
-if send and prompt:
-
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    content = [{"type": "text", "text": prompt}]
-
-    for img in st.session_state.images:
-        content.append({
-            "type":"image_url",
-            "image_url":{
-                "url":f"data:image/jpeg;base64,{img}"
-            }
-        })
-
-    system_prompt = {
-        "role":"system",
-        "content":"""
-너는 친근하고 분석을 잘하는 AI 친구다.
-
-대화 스타일
-- 친구처럼 자연스럽게 말한다
-- 설명은 충분히 자세하게 한다
-- 의견을 솔직하게 말한다
-- 이모지를 적당히 사용한다 👀👍
-
-사진이 여러 장 올라오면 반드시
-
-1️⃣ 사진별 특징 설명
-2️⃣ 색상 / 스타일 분석
-3️⃣ 어울리는 순위
-4️⃣ 장점과 단점
-5️⃣ 최종 결론
-"""
-    }
-
-    messages = [system_prompt]
-
-    for m in st.session_state.messages:
-        messages.append({
-            "role":m["role"],
-            "content":m["content"]
-        })
-
-    messages.append({
-        "role":"user",
-        "content":content
-    })
-
-    with st.chat_message("assistant"):
-
-        stream = client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages,
-            temperature=1.1,
-            stream=True
-        )
-
-        response = st.write_stream(stream)
-
-    st.session_state.messages.append({"role":"user","content":prompt})
-    st.session_state.messages.append({"role":"assistant","content":response})
