@@ -4,39 +4,47 @@ import io
 from openai import OpenAI
 from PIL import Image
 
-# 1. 클라이언트 초기화 (Secrets에 설정한 이름 OPENAI_API_KEY 사용)
+# API 클라이언트 초기화
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-st.title("📸 GPT 이미지 분석기")
+st.title("🤖 나만의 GPT 챗봇")
 
-# 사진 업로드 위젯
-uploaded_file = st.file_uploader("이미지를 업로드하세요 (png/jpg/jpeg)", type=["png", "jpg", "jpeg"])
+# 대화 기록 유지 (앱이 새로고침되어도 대화가 사라지지 않게 함)
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-if uploaded_file is not None:
-    # 업로드된 이미지 표시
-    image = Image.open(uploaded_file)
-    st.image(image, caption="업로드된 이미지", use_column_width=True)
+# 기존 대화 내용을 화면에 출력
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-    # 이미지를 base64 형식으로 변환 (GPT-4o가 읽기 위한 필수 과정)
-    buffered = io.BytesIO()
-    image.save(buffered, format="JPEG")
-    img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+# 이미지 업로드 버튼
+uploaded_file = st.file_uploader("사진을 분석하고 싶다면 여기 올리세요 (선택)", type=["png", "jpg", "jpeg"])
 
-    # GPT API 호출
-    with st.spinner("AI가 이미지를 분석 중입니다..."):
-        response = client.chat.completions.create(
-            model="gpt-4o", # 더 성능이 좋은 gpt-4o 모델 사용
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "이 이미지를 간단히 설명해줘."},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"}}
-                    ]
-                }
-            ]
+# 채팅 입력창
+if prompt := st.chat_input("메시지를 입력하세요..."):
+    # 1. 사용자의 질문을 저장하고 표시
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # 2. 이미지 처리 준비
+    content_payload = [{"type": "text", "text": prompt}]
+    if uploaded_file:
+        image = Image.open(uploaded_file)
+        buffered = io.BytesIO()
+        image.save(buffered, format="JPEG")
+        img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+        content_payload.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"}})
+
+    # 3. GPT 호출 (스트리밍 방식 적용 - 더 빠릿함)
+    with st.chat_message("assistant"):
+        stream = client.chat.completions.create(
+            model="gpt-4o", # 성능 좋은 모델
+            messages=[{"role": "user", "content": content_payload}],
+            stream=True,
         )
-
-    # GPT 응답 출력
-    st.subheader("분석 결과")
-    st.write(response.choices[0].message.content)
+        response = st.write_stream(stream)
+    
+    # 4. AI의 답변을 저장
+    st.session_state.messages.append({"role": "assistant", "content": response})
