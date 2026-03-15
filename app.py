@@ -4,26 +4,26 @@ import io
 from openai import OpenAI
 from PIL import Image
 
-# OpenAI API 연결
+# OpenAI 연결
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-st.set_page_config(page_title="나만의 AI 친구", page_icon="🤖")
+st.set_page_config(page_title="AI 스타일 챗봇", page_icon="🤖")
 
 st.title("🤖 나만의 AI 스타일 & 질문 챗봇")
-st.caption("아무 질문이나 해보세요! 사진도 분석해 드려요 📷")
+st.caption("사진을 올리면 분석하고 ChatGPT처럼 대화합니다!")
 
-# 대화 기록 저장
+# 대화 기록
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 이전 대화 출력
+# 기존 대화 표시
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# 이미지 업로드
+# 사진 업로드
 uploaded_files = st.file_uploader(
-    "사진 업로드 (선택 / 여러 장 가능)",
+    "사진 업로드 (여러 장 가능)",
     type=["png", "jpg", "jpeg"],
     accept_multiple_files=True
 )
@@ -36,15 +36,22 @@ if prompt:
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 메시지 구성
+        # 👇 업로드한 사진 화면에 표시
+        if uploaded_files:
+            cols = st.columns(len(uploaded_files))
+
+            for i, file in enumerate(uploaded_files):
+                image = Image.open(file)
+                cols[i].image(image, caption=f"{i+1}번 사진", use_container_width=True)
+
     content = [{"type": "text", "text": prompt}]
 
-    # 이미지가 있을 경우 GPT에 전달
+    # GPT에 이미지 전달
     if uploaded_files:
         for file in uploaded_files:
 
             image = Image.open(file)
-            image.thumbnail((1024, 1024))
+            image.thumbnail((1024,1024))
 
             buf = io.BytesIO()
             image.save(buf, format="JPEG")
@@ -52,89 +59,48 @@ if prompt:
             img_base64 = base64.b64encode(buf.getvalue()).decode()
 
             content.append({
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:image/jpeg;base64,{img_base64}"
+                "type":"image_url",
+                "image_url":{
+                    "url":f"data:image/jpeg;base64,{img_base64}"
                 }
             })
 
-    # ChatGPT 스타일 시스템 프롬프트
     system_prompt = {
-        "role": "system",
-        "content": """
+        "role":"system",
+        "content":"""
 너는 친근한 스타일 상담 AI이자 ChatGPT 같은 대화 파트너다.
 
-대화 스타일 규칙:
+사진이 여러 장 올라오면
+반드시 '1번 사진', '2번 사진' 기준으로 설명한다.
 
-1. 말투
-- 친구에게 설명하듯 자연스럽게 말한다
-- 너무 딱딱한 설명 금지
-- 공감 + 의견을 같이 말한다
+예시:
 
-2. 사진 분석 방식
-사용자가 여러 사진을 올리면 다음 구조로 답한다.
+사진을 보면 이런 색이 있습니다 👀
 
-사진을 보면 이런 스타일이 있습니다 👀
+1️⃣ 1번 사진 — 카멜
+2️⃣ 2번 사진 — 다크브라운
+3️⃣ 3번 사진 — 블랙
 
-1️⃣ 스타일 A
-2️⃣ 스타일 B
-3️⃣ 스타일 C
+이후 어울리는 순위를 설명한다.
 
-전체적으로 어울리는 순서를 말해보면 👇
-
-🥇 1위 — 설명
-이유:
-- 장점
-- 장점
-
-👉 개인적으로 이게 제일 좋아 보였습니다.
-
-🥈 2위 — 설명
-장점
-- 내용
-
-단점
-- 내용
-
-🥉 3위 — 설명
-단점
-- 내용
-
-마지막에는 반드시 결론을 정리한다.
-
-예:
-✅ 결론
-🥇 A
-🥈 B
-🥉 C
-
-3. 이모지 사용
-적당히 사용
-👀 👕 👍 👌
-
-4. 대화형
-사용자가 질문하면 자연스럽게 이어서 대화한다.
-
-5. 딱딱한 보고서 스타일 금지
-친구에게 설명하듯 말한다.
+말투는 친구처럼 자연스럽게 하고
+이모지를 적당히 사용한다.
 """
     }
 
-    # 메시지 구성
     messages = [system_prompt]
 
     for m in st.session_state.messages:
         messages.append({
-            "role": m["role"],
-            "content": m["content"]
+            "role":m["role"],
+            "content":m["content"]
         })
 
     messages.append({
-        "role": "user",
-        "content": content
+        "role":"user",
+        "content":content
     })
 
-    # GPT 응답
     with st.chat_message("assistant"):
 
         stream = client.chat.completions.create(
@@ -146,6 +112,5 @@ if prompt:
 
         response = st.write_stream(stream)
 
-    # 대화 저장
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    st.session_state.messages.append({"role": "assistant", "content": response})
+    st.session_state.messages.append({"role":"user","content":prompt})
+    st.session_state.messages.append({"role":"assistant","content":response})
