@@ -4,31 +4,25 @@ import io
 from openai import OpenAI
 from PIL import Image
 
-# API 클라이언트 초기화
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"].strip())
 
-st.title("🤖 GPT 다중 이미지 분석기")
+st.title("💡 나의 만능 AI 비서")
 
-# 대화 기록 유지
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 대화 내용 표시
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# 이미지 업로드 (여러 장 가능)
-uploaded_files = st.file_uploader("사진을 여러 장 선택하세요", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+uploaded_files = st.file_uploader("이미지를 분석하고 싶다면 업로드하세요 (선택)", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 prompt = st.chat_input("질문을 입력하세요...")
 
 if prompt:
-    # 사용자 메시지 저장
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # GPT에게 보낼 데이터 구성
     content_payload = [{"type": "text", "text": prompt}]
     
     if uploaded_files:
@@ -38,16 +32,19 @@ if prompt:
             buffered = io.BytesIO()
             image.save(buffered, format="JPEG")
             img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
-            
             content_payload.append({
                 "type": "image_url", 
                 "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"}
             })
 
-    # AI 성격 부여 및 응답 생성
+    # [시스템 프롬프트: 모든 분야에 적용되는 전문가 스타일]
     system_instruction = {
         "role": "system", 
-        "content": "당신은 세계 최고의 AI 비서입니다. 답변은 항상 매우 자세하고 친절하며, 전문가 수준의 분석을 제공하세요. 중요한 내용은 불렛 포인트로 정리하고, 시각적 디테일을 꼼꼼하게 설명해 주세요."
+        "content": """당신은 다방면에 능통한 전문 AI 어시스턴트입니다. 아래 가이드라인을 엄격히 준수하세요:
+        1. 말투: 친근하고 상냥하게, 친구나 가족에게 조언하듯 대하세요. 이모지(👍, ✨, 💡 등)를 적절히 활용해 답변을 생동감 있게 만드세요.
+        2. 답변 구조: 결론부터 제시하고, 그 이유를 설명한 뒤, 구체적인 실행 방법(단계별 가이드)을 불렛 포인트로 정리하세요.
+        3. 가독성: 중요한 정보는 볼드체(**텍스트**)로 강조하고, 전체적인 답변의 흐름을 논리적으로 구성하세요.
+        4. 태도: 사용자가 어렵게 느끼지 않도록 전문 지식을 아주 쉽고 직관적으로 풀어서 설명하세요."""
     }
 
     with st.chat_message("assistant"):
