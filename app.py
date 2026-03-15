@@ -1,68 +1,81 @@
 import streamlit as st
 from openai import OpenAI
 
-# OpenAI API 연결
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-# 시스템 프롬프트 (ChatGPT 스타일)
 SYSTEM_PROMPT = """
-You are a friendly and natural conversational AI.
+You are a helpful conversational AI similar to ChatGPT.
 
 Rules:
-- Speak naturally like chatting with a friend.
-- Be warm, helpful, and clear.
-- Avoid sounding robotic or overly formal.
-- Keep answers concise but informative.
-- If the user speaks Korean, respond in Korean.
+- Speak naturally like chatting with a person.
+- Be friendly and clear.
+- Avoid robotic responses.
+- Maintain context from previous messages.
+- If the user writes Korean, respond in Korean.
 """
 
-# 세션에 대화 기록 저장
+st.set_page_config(page_title="My ChatGPT", layout="wide")
+
+# 대화 저장
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "assistant", "content": "안녕하세요! 무엇을 도와드릴까요? 🙂"}
     ]
 
-# 제목
-st.title("My GPT Chat")
+# 사이드바
+with st.sidebar:
+    st.title("ChatGPT")
 
-# 기존 채팅 출력
+    if st.button("➕ 새 대화"):
+        st.session_state.messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "assistant", "content": "안녕하세요! 무엇을 도와드릴까요? 🙂"}
+        ]
+        st.rerun()
+
+st.title("My ChatGPT")
+
+# 기존 채팅 표시
 for msg in st.session_state.messages:
-    if msg["role"] == "user":
-        with st.chat_message("user"):
-            st.write(msg["content"])
+    if msg["role"] == "system":
+        continue
 
-    elif msg["role"] == "assistant":
-        with st.chat_message("assistant"):
-            st.write(msg["content"])
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
 
-# 사용자 입력
+# 입력창
 user_input = st.chat_input("메시지를 입력하세요")
 
 if user_input:
 
-    # 사용자 메시지 저장
     st.session_state.messages.append({
         "role": "user",
         "content": user_input
     })
 
-    # GPT 호출
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=st.session_state.messages,
-        temperature=0.7,
-        max_tokens=800
-    )
+    with st.chat_message("user"):
+        st.markdown(user_input)
 
-    reply = response.choices[0].message.content
+    # GPT 응답
+    with st.chat_message("assistant"):
 
-    # GPT 답변 저장
+        placeholder = st.empty()
+        full_response = ""
+
+        stream = client.chat.completions.create(
+            model="gpt-5",
+            messages=st.session_state.messages,
+            temperature=0.7,
+            stream=True
+        )
+
+        for chunk in stream:
+            delta = chunk.choices[0].delta.content or ""
+            full_response += delta
+            placeholder.markdown(full_response)
+
     st.session_state.messages.append({
         "role": "assistant",
-        "content": reply
+        "content": full_response
     })
-
-    # 화면에 출력
-    with st.chat_message("assistant"):
-        st.write(reply)
