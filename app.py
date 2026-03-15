@@ -38,6 +38,14 @@ with st.sidebar:
 
 st.title("My ChatGPT")
 
+uploaded_file = st.file_uploader(
+    "파일 업로드",
+    type=["pdf", "txt", "docx", "png", "jpg"]
+)
+
+if uploaded_file:
+    st.write("업로드된 파일:", uploaded_file.name)
+    
 # 기존 대화 표시
 for msg in st.session_state.messages:
     if msg["role"] == "system":
